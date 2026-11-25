@@ -151,11 +151,11 @@ with col2:
 st.markdown("---")
 st.subheader("📌 Filtrar por tipo de comida")
 
- tipo_comida = st.multiselect(
-        "¿Para qué momento te sirve?",
-        ["Desayuno", "Almuerzo", "Cena", "Merienda", "Snack"],
-        default=["Desayuno", "Almuerzo", "Cena"]
-    )
+tipo_comida = st.multiselect(
+    "¿Para qué momento te sirve?",
+    ["Desayuno", "Almuerzo", "Cena", "Merienda", "Snack"],
+    default=["Desayuno", "Almuerzo", "Cena"]
+)
 
 # Sección 3: Botón principal
 st.markdown("---")
