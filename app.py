@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+from model_9_10_1 import NeuralNetwork_9_10_1
 
 # 1. CONFIGURACIÓN DE PÁGINA Y ESTILOS CSS
 st.set_page_config(page_title="Chef IA — Planificador Inteligente", page_icon="🍳", layout="centered")
@@ -72,6 +73,40 @@ def load_data():
     return df
 
 df = load_data()
+
+# =============================================================================
+# FUNCIÓN DE MEMBRESÍA TRIANGULAR
+# =============================================================================
+def calcular_fuzzy_receta(row):
+    """
+    Calcula las 9 variables fuzzy para una receta
+    Basado en nutrientes normalizados usando membresía triangular
+    """
+    cal = float(row.get('calories', 200))
+    prot = float(row.get('protein', 15))
+    gras = float(row.get('fat', 10))
+
+    # Triángulos de membresía (valores normalizados 0-1)
+    # Basado en distribuciones típicas de recetas
+
+    # Calorías: bajo < 150, medio ~ 200-400, alto > 500
+    cal_baja = 1.0 if cal < 120 else (0.5 if cal < 250 else 0.0)
+    cal_media = 0.6 if 120 <= cal <= 350 else (0.3 if cal < 500 else 0.0)
+    cal_alta = 1.0 if cal > 350 else (0.5 if cal > 250 else 0.0)
+
+    # Proteínas: bajo < 10g, medio ~ 15-25g, alto > 30g
+    prot_baja = 1.0 if prot < 8 else (0.6 if prot < 18 else 0.0)
+    prot_media = 0.6 if 8 <= prot <= 25 else (0.3 if prot < 35 else 0.0)
+    prot_alta = 1.0 if prot > 25 else (0.5 if prot > 15 else 0.0)
+
+    # Grasas: bajo < 5g, medio ~ 10-15g, alto > 20g
+    gras_baja = 1.0 if gras < 4 else (0.6 if gras < 12 else 0.0)
+    grasa_media = 0.6 if 4 <= gras <= 15 else (0.3 if gras < 22 else 0.0)
+    grasa_alta = 1.0 if gras > 15 else (0.5 if gras > 8 else 0.0)
+
+    return [cal_baja, cal_media, cal_alta,
+            prot_baja, prot_media, prot_alta,
+            gras_baja, grasa_media, grasa_alta]
 
 # Control de pasos (Wizard)
 if "step" not in st.session_state:
@@ -267,29 +302,47 @@ elif st.session_state.step == 8:
 
     resultados = df_filtered.head(st.session_state.get("num_recetas", 5))
 
+    # =============================================================================
+    # INICIALIZAR MODELO DE RATING (solo una vez)
+    # =============================================================================
+    if 'rating_model' not in st.session_state:
+        st.session_state.rating_model = NeuralNetwork_9_10_1()
+
+    model = st.session_state.rating_model
+
     if len(resultados) == 0:
         st.warning("No encontramos recetas con esas restricciones estrictas. Prueba quitando algunos bloqueos.")
     else:
         dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
-        
+
         for idx, (_, row) in enumerate(resultados.iterrows()):
             dia_txt = dias[idx % len(dias)]
             pais_txt = row.get("cuisine", "Internacional")
-            
+
             # Formateo seguro para métricas
             cal = int(round(float(row.get('calories', 0))))
             prot = int(round(float(row.get('protein', 0))))
             gras = int(round(float(row.get('fat', 0))))
             rat = round(float(row.get('rating', 4.0)), 1)
 
+            # =============================================================================
+            # CALCULAR RATING PREDICCIÓN CON MODELO 9-10-1
+            # =============================================================================
+            try:
+                fuzzy_inputs = calcular_fuzzy_receta(row)
+                rating_pred = model.predict(fuzzy_inputs)
+                rat_display = f"{rating_pred:.1f} (IA)"
+            except Exception as e:
+                rat_display = f"{rat} (real)"
+
             st.markdown(f"""
             <div class='recipe-card'>
                 <span class='badge-country'>📍 Cocina {pais_txt}</span>
-                <span class='badge-rating'>⭐ {rat} / 5.0</span>
+                <span class='badge-rating'>⭐ {rat_display}</span>
                 <h3 style='margin-top: 10px; color: #FFFFFF;'>🗓️ {dia_txt}: {row['title']}</h3>
             </div>
             """, unsafe_allow_html=True)
-            
+
             c1, c2, c3 = st.columns(3)
             c1.metric("Calorías", f"{cal} kcal")
             c2.metric("Proteína", f"{prot} g")
